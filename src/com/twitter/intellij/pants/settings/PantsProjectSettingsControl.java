@@ -33,6 +33,8 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JTextField;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +52,8 @@ public class PantsProjectSettingsControl extends AbstractExternalProjectSettings
     executableScript,
     isBUILDFile
   }
+
+  private final JTextField myNameField = new JTextField();
 
   @VisibleForTesting
   protected CheckBoxList<String> myTargetSpecsBox = new CheckBoxList<>();
@@ -91,6 +95,8 @@ public class PantsProjectSettingsControl extends AbstractExternalProjectSettings
     myTargetSpecsBox.setItems( mySettings.getAllAvailableTargetSpecs(), x->x);
     mySettings.getSelectedTargetSpecs().forEach(spec -> myTargetSpecsBox.setItemSelected(spec, true));
 
+    insertNameFieldBeforeProjectPath(content);
+
     List<JComponent> boxes = ContainerUtil.newArrayList(
       myLibsWithSourcesCheckBox,
       myEnableIncrementalImportCheckBox,
@@ -107,6 +113,12 @@ public class PantsProjectSettingsControl extends AbstractExternalProjectSettings
     for (JComponent component : boxes) {
       content.add(component, lineConstraints);
     }
+  }
+
+  private void insertNameFieldBeforeProjectPath(@NotNull PaintAwarePanel content) {
+    JLabel label = new JLabel(PantsBundle.message("pants.settings.text.project.name"));
+    content.add(label, ExternalSystemUiUtil.getLabelConstraints(0), 0);
+    content.add(myNameField, ExternalSystemUiUtil.getFillLineConstraints(0), 1);
   }
 
   // It is silly `CheckBoxList` does not provide an iterator.
@@ -136,6 +148,7 @@ public class PantsProjectSettingsControl extends AbstractExternalProjectSettings
       myUseIntellijCompilerCheckBox.isSelected()
     );
 
+    newSettings.setProjectName(myNameField.getText());
     return !newSettings.equals(getInitialSettings());
   }
 
@@ -226,6 +239,7 @@ public class PantsProjectSettingsControl extends AbstractExternalProjectSettings
 
   @Override
   protected void applyExtraSettings(@NotNull PantsProjectSettings settings) {
+    settings.setProjectName(myNameField.getText());
     settings.setSelectedTargetSpecs(getSelectedTargetSpecsFromBoxes());
     settings.setAllAvailableTargetSpecs(getAllTargetSpecsFromBoxes());
     settings.libsWithSources = myLibsWithSourcesCheckBox.isSelected();
@@ -243,6 +257,10 @@ public class PantsProjectSettingsControl extends AbstractExternalProjectSettings
 
   @Override
   public boolean validate(@NotNull PantsProjectSettings settings) throws ConfigurationException {
+    if(myNameField.getText().isEmpty()){
+      throw new ConfigurationException(PantsBundle.message("pants.error.project.name.empty"));
+    }
+    
     final String projectUrl = VfsUtil.pathToUrl(settings.getExternalProjectPath());
     final VirtualFile file = VirtualFileManager.getInstance().findFileByUrl(projectUrl);
     ProjectPathFileType pathFileType = determinePathKind(file);

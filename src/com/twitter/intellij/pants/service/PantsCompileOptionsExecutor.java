@@ -30,10 +30,11 @@ import org.jetbrains.annotations.TestOnly;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class PantsCompileOptionsExecutor {
   protected static final Logger LOG = Logger.getInstance(PantsCompileOptionsExecutor.class);
@@ -109,13 +110,39 @@ public class PantsCompileOptionsExecutor {
 
   @NotNull
   @Nls
-  public String getProjectName() {
-    final String buildRootName = getBuildRoot().getName();
-    List<String> buildRootPrefixedSpecs = myOptions.getSelectedTargetSpecs().stream()
-      .map(s -> buildRootName + File.separator + s)
-      .collect(Collectors.toList());
-    String candidateName = String.join("__", buildRootPrefixedSpecs).replaceAll(File.separator, ".");
-    return candidateName.substring(0, Math.min(PROJECT_NAME_LIMIT, candidateName.length()));
+  public String getDefaultProjectName() {
+    List<String> targets = myOptions.getSelectedTargetSpecs();
+    if (targets.size() == 1) {
+      return getDefaultProjectName(Paths.get(targets.get(0)));
+    }
+    else {
+      return getDefaultProjectName(Paths.get(myOptions.getExternalProjectPath()));
+    }
+  }
+
+  private String getDefaultProjectName(Path projectPath) {
+    if (PantsUtil.isBUILDFilePath(projectPath.toString())) {
+      return normalize(projectPath.getParent());
+    }
+    else {
+      return normalize(projectPath);
+    }
+  }
+
+  private String normalize(Path projectPath) {
+    Path buildRoot = myBuildRoot.toPath();
+    String name;
+    if (projectPath.equals(buildRoot)) {
+      name = buildRoot.getFileName().toString();
+    }
+    else if (projectPath.startsWith(buildRoot)) {
+      name = projectPath.relativize(buildRoot).toString();
+    }
+    else {
+      name = projectPath.toString();
+    }
+
+    return name.substring(0, Math.min(PROJECT_NAME_LIMIT, name.length())).replaceAll(File.separator, ".");
   }
 
   @NotNull
