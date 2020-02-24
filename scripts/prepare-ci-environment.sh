@@ -87,5 +87,3 @@ append_intellij_jvm_options() {
 
   echo $cmd
 }
-
-export JDK_JARS="$(printf "%s\n" 'sa-jdi.jar' 'tools.jar')"
