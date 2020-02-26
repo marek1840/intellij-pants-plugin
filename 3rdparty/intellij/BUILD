@@ -1,6 +1,8 @@
 import os
 import re
 
+_jdk_jar_paths = os.environ['JDK_JARS'].split('\n') if 'JDK_JARS' in os.environ else []
+
 _is_ultimate = os.getenv('IJ_ULTIMATE', 'false') == 'true'
 
 VERSION_PATTERN = r"""
@@ -143,6 +145,10 @@ jar_library(
     jars = [
         _intellij_sdk_jar(path) for path in _find_jars_blacklist(
             os.path.join(os.environ['INTELLIJ_HOME'], 'lib'))
+    ] + [
+        _jdk_jar(path) for path in _find_jars_whitelist(
+            os.environ['JDK_LIBS_HOME'],
+            whitelist=_jdk_jar_paths)
     ],
     scope='compile test',
 )

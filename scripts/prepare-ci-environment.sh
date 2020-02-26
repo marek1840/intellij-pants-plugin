@@ -87,3 +87,9 @@ append_intellij_jvm_options() {
 
   echo $cmd
 }
+
+# on java 9+ these jars are not available
+if [ -f "$JAVA_HOME/lib/tools.jar" ]; then
+  JDK_JARS="$(printf "%s\n" 'sa-jdi.jar' 'tools.jar')"
+fi
+export JDK_JARS

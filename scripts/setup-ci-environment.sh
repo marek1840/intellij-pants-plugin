@@ -24,6 +24,14 @@ CACHE_JDK_LIB_DIR='.cache/jdk-libs'
 
 mkdir -p "$CACHE_JDK_LIB_DIR"
 
+for jar_file in $JDK_JARS; do
+  src_jar="$JDK_LIB_DIR/$jar_file"
+  dest_jar="$CACHE_JDK_LIB_DIR/$jar_file"
+  if [ -f "$src_jar" ] && [ ! -f "$dest_jar" ]; then
+    cp "$src_jar" "$dest_jar"
+  fi
+done
+
 if [ ! -d .cache/intellij/$FULL_IJ_BUILD_NUMBER/idea-dist ]; then
   IJ_TAR_NAME=idea${IJ_BUILD}.tar.gz
   echo "Loading $IJ_BUILD..."
