@@ -9,11 +9,6 @@ cache:
     - .cache/bootstrap # See pants.ini [cache.bootstrap]
     - .cache/pants     # Pants downloaded by scripts/setup-ci-environment.sh
 
-notifications:
-  email:
-    - yic@twitter.com
-    - dmcclanahan@twitter.com
-
 addons:
   apt:
     packages:
