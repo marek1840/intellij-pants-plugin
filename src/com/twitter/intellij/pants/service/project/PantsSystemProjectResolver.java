@@ -40,7 +40,6 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.openapi.wm.ToolWindowManager;
-import com.intellij.util.Consumer;
 import com.intellij.util.messages.MessageBusConnection;
 import com.twitter.intellij.pants.metrics.PantsExternalMetricsListenerManager;
 import com.twitter.intellij.pants.projectview.PantsProjectPaneSelectInTarget;
@@ -82,7 +81,7 @@ public class PantsSystemProjectResolver implements ExternalSystemProjectResolver
 
       Module[] modules = ModuleManager.getInstance(project).getModules();
       for (Module module : modules) {
-        boolean hasPantsProjectPath = Objects.equals(module.getOptionValue(PantsConstants.PANTS_OPTION_LINKED_PROJECT_PATH), projectPath);
+        boolean hasPantsProjectPath = Objects.equals(module.getOptionValue(PantsConstants.PANTS_OPTION_LINKED_PROJECT_PATH), Paths.get(projectPath).normalize().toString());
         boolean isNotBeingImported = !importedModules.contains(module.getName());
         if (hasPantsProjectPath && isNotBeingImported) {
           ModuleManager.getInstance(project).disposeModule(module);
@@ -110,7 +109,10 @@ public class PantsSystemProjectResolver implements ExternalSystemProjectResolver
     checkForDifferentPantsExecutables(id, projectPath);
     final PantsCompileOptionsExecutor executor = PantsCompileOptionsExecutor.create(projectPath, settings);
     task2executor.put(id, executor);
-    DataNode<ProjectData> projectDataNode = resolveProjectInfoImpl(id, executor, listener, settings, isPreviewMode);
+
+    final DataNode<ProjectData> projectDataNode =
+      resolveProjectInfoImpl(id, executor, listener, settings, isPreviewMode);
+
     // We do not want to repeatedly force switching to 'Project Files Tree' view if
     // user decides to use import dep as jar and wants to use the more focused 'Project' view.
     if (!settings.isImportSourceDepsAsJars()) {
@@ -207,7 +209,7 @@ public class PantsSystemProjectResolver implements ExternalSystemProjectResolver
       .ifPresent(sdk -> projectDataNode.createChild(ProjectSdkData.KEY, sdk));
 
     if (!isPreviewMode) {
-      PantsExternalMetricsListenerManager.getInstance().logIsIncrementalImport(settings.isEnableIncrementalImport());
+      PantsExternalMetricsListenerManager.getInstance().logIsIncrementalImport(settings.incrementalImportDepth().isPresent());
       resolveUsingPantsGoal(id, executor, listener, projectDataNode);
 
       if (!containsContentRoot(projectDataNode, executor.getProjectDir())) {
@@ -255,15 +257,10 @@ public class PantsSystemProjectResolver implements ExternalSystemProjectResolver
   ) {
     final PantsResolver dependenciesResolver = new PantsResolver(executor);
     dependenciesResolver.resolve(
-      new Consumer<String>() {
-        @Override
-        public void consume(String status) {
-          listener.onStatusChange(new ExternalSystemTaskNotificationEvent(id, status));
-        }
-      },
+      status -> listener.onStatusChange(new ExternalSystemTaskNotificationEvent(id, status)),
       new ProcessAdapter() {
         @Override
-        public void onTextAvailable(ProcessEvent event, Key outputType) {
+        public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
           listener.onTaskOutput(id, event.getText(), outputType == ProcessOutputTypes.STDOUT);
         }
       }
@@ -277,7 +274,7 @@ public class PantsSystemProjectResolver implements ExternalSystemProjectResolver
     return executor != null && executor.cancelAllProcesses();
   }
 
-  private class ViewSwitchProcessor {
+  private static class ViewSwitchProcessor {
     private final Project myProject;
     private final String myProjectPath;
     private ScheduledFuture<?> directoryFocusHandle;
@@ -295,52 +292,40 @@ public class PantsSystemProjectResolver implements ExternalSystemProjectResolver
       if (projectWindow == null) {
         return;
       }
-      ApplicationManager.getApplication().invokeLater(new Runnable() {
-        @Override
-        public void run() {
-          // Show Project Pane, and switch to ProjectFilesViewPane right after.
-          projectWindow.show(new Runnable() {
-            @Override
-            public void run() {
-              ProjectView.getInstance(myProject).changeView(ProjectFilesViewPane.ID);
-              // Disable directory focus as it may cause too much stress when
-              // there is heavy indexing load right after project import.
-              // https://youtrack.jetbrains.com/issue/IDEA-204959
-              // queueFocusOnImportDirectory();
-            }
-          });
-        }
+      ApplicationManager.getApplication().invokeLater(() -> {
+        // Show Project Pane, and switch to ProjectFilesViewPane right after.
+        projectWindow.show(() -> {
+          ProjectView.getInstance(myProject).changeView(ProjectFilesViewPane.ID);
+          // Disable directory focus as it may cause too much stress when
+          // there is heavy indexing load right after project import.
+          // https://youtrack.jetbrains.com/issue/IDEA-204959
+          // queueFocusOnImportDirectory();
+        });
       });
     }
 
     private void queueFocusOnImportDirectory() {
-      directoryFocusHandle = PantsUtil.scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
-        @Override
-        public void run() {
-          if (ModuleManager.getInstance(myProject).getModules().length == 0 ||
-              !ProjectView.getInstance(myProject).getCurrentViewId().equals(ProjectFilesViewPane.ID)) {
-            return;
-          }
-          ApplicationManager.getApplication().invokeLater(new Runnable() {
-            @Override
-            public void run() {
-              final VirtualFile pathImported = LocalFileSystem.getInstance().findFileByPath(myProjectPath);
-              // Skip focusing if directory is not found.
-              if (pathImported != null) {
-                VirtualFile importDirectory = pathImported.isDirectory() ? pathImported : pathImported.getParent();
-                SelectInContext selectInContext = new FileSelectInContext(myProject, importDirectory);
-                for (SelectInTarget selectInTarget : ProjectView.getInstance(myProject).getSelectInTargets()) {
-                  if (selectInTarget instanceof PantsProjectPaneSelectInTarget) {
-                    selectInTarget.selectIn(selectInContext, false);
-                    break;
-                  }
-                }
-              }
-              final boolean mayInterruptIfRunning = true;
-              directoryFocusHandle.cancel(mayInterruptIfRunning);
-            }
-          });
+      directoryFocusHandle = PantsUtil.scheduledThreadPool.scheduleWithFixedDelay(() -> {
+        if (ModuleManager.getInstance(myProject).getModules().length == 0 ||
+            !ProjectView.getInstance(myProject).getCurrentViewId().equals(ProjectFilesViewPane.ID)) {
+          return;
         }
+        ApplicationManager.getApplication().invokeLater(() -> {
+          final VirtualFile pathImported = LocalFileSystem.getInstance().findFileByPath(myProjectPath);
+          // Skip focusing if directory is not found.
+          if (pathImported != null) {
+            VirtualFile importDirectory = pathImported.isDirectory() ? pathImported : pathImported.getParent();
+            SelectInContext selectInContext = new FileSelectInContext(myProject, importDirectory);
+            for (SelectInTarget selectInTarget : ProjectView.getInstance(myProject).getSelectInTargets()) {
+              if (selectInTarget instanceof PantsProjectPaneSelectInTarget) {
+                selectInTarget.selectIn(selectInContext, false);
+                break;
+              }
+            }
+          }
+          final boolean mayInterruptIfRunning = true;
+          directoryFocusHandle.cancel(mayInterruptIfRunning);
+        });
       }, 0, 1, TimeUnit.SECONDS);
     }
   }

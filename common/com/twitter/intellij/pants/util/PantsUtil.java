@@ -620,7 +620,7 @@ public class PantsUtil {
     }
   }
 
-  private static boolean isBspProject(Project project) {
+  public static boolean isBspProject(Project project) {
     ProjectSystemId id = ProjectSystemId.findById("BSP");
     return id != null && ExternalProjectUtil.isExternalProject(project, id);
   }
@@ -770,12 +770,12 @@ public class PantsUtil {
    */
   @Nullable
   public static String getJdkPathFromExternalBuilder(@NotNull JpsProject project) {
-    JpsSdkReference sdkReference = project.getSdkReferencesTable().getSdkReference(JpsJavaSdkType.INSTANCE);
+    JpsSdkReference<?> sdkReference = project.getSdkReferencesTable().getSdkReference(JpsJavaSdkType.INSTANCE);
     if (sdkReference != null) {
       String sdkName = sdkReference.getSdkName();
       JpsLibrary lib = project.getModel().getGlobal().getLibraryCollection().findLibrary(sdkName);
       if (lib != null && lib.getProperties() instanceof JpsSdkImpl) {
-        return ((JpsSdkImpl) lib.getProperties()).getHomePath();
+        return ((JpsSdkImpl<?>) lib.getProperties()).getHomePath();
       }
     }
     return null;
