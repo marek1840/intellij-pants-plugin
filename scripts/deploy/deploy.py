@@ -71,7 +71,7 @@ if __name__ == "__main__":
       build_cmd = 'rm -rf dist;' \
                   './pants binary scripts/sdk:intellij-pants-plugin-publish'
       logger.info(build_cmd)
-      subprocess.check_output(build_cmd, shell=True, stderr=devnull)
+      subprocess.check_output(build_cmd, shell=True)
 
       logger.info("Packaging into a zip")
       # Move the jar under pants/lib, but because there is already `pants` under build root,
@@ -85,12 +85,12 @@ if __name__ == "__main__":
                       'rm -rf tmp' \
         .format(jar=PLUGIN_JAR, zip=zip_name)
       logger.info(packaging_cmd)
-      subprocess.check_output(packaging_cmd, shell=True, stderr=devnull)
+      subprocess.check_output(packaging_cmd, shell=True)
       logger.info('{} built successfully'.format(zip_name))
 
     finally:
       # Reset `PLUGIN_XML` since it has been modified.
-      subprocess.check_output('git checkout {}'.format(PLUGIN_XML), shell=True, stderr=devnull)
+      subprocess.check_output('git checkout {}'.format(PLUGIN_XML), shell=True)
 
     if args.skip_publish:
       logger.info("Publishing skipped.")
